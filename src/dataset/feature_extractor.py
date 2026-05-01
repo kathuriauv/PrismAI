@@ -1,13 +1,15 @@
 import torch
+import torch.nn.functional as F
 import torchaudio.transforms as T
 import soundfile as sf
 from transformers import RobertaTokenizer
 from src.models.video_encoder import VideoEncoder
 
 class MultimodalFeatureExtractor:
-    def __init__(self, text_model_name='roberta-base', max_text_len=128, sample_rate=16000):
+    def __init__(self, text_model_name='roberta-base', max_text_len=128, max_audio_len=250, sample_rate=16000):
         self.tokenizer = RobertaTokenizer.from_pretrained(text_model_name)
         self.max_text_len = max_text_len
+        self.max_audio_len = max_audio_len 
         self.sample_rate = sample_rate
         
         self.mel_spectrogram = T.MelSpectrogram(
@@ -54,15 +56,24 @@ class MultimodalFeatureExtractor:
             mel_spec = self.mel_spectrogram(waveform)
             log_mel_spec = self.amplitude_to_db(mel_spec)
             
+            # --- NEW: Pad or Truncate Audio to max_audio_len ---
+            time_steps = log_mel_spec.shape[-1]
+            if time_steps < self.max_audio_len:
+                # Pad with zeros on the time dimension
+                padding = self.max_audio_len - time_steps
+                log_mel_spec = F.pad(log_mel_spec, (0, padding))
+            elif time_steps > self.max_audio_len:
+                # Truncate to max length
+                log_mel_spec = log_mel_spec[:, :, :self.max_audio_len]
+                
             return log_mel_spec
             
         except Exception as e:
             print(f"Error loading {filepath}: {e}")
-            return torch.zeros((1, 64, 100))
+            return torch.zeros((1, 64, self.max_audio_len))
 
     def process_video(self, video_path, start_time=None, end_time=None):
         return self.video_encoder.extract_frame(video_path, start_time, end_time)
-
 
 if __name__ == "__main__":
     extractor = MultimodalFeatureExtractor()
