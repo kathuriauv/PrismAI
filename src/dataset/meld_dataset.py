@@ -56,7 +56,8 @@ class MELDDataset(Dataset):
             'attention_mask': text_features['attention_mask'],
             'audio_features': audio_features,
             'video_frame': video_frame,
-            'label': sample['label']
+            'label': sample['label'],
+            'dataset_id': torch.tensor(1, dtype=torch.long) # MELD Calibration ID
         }
 
 if __name__ == "__main__":
@@ -71,3 +72,4 @@ if __name__ == "__main__":
         print(f"Audio Spectrogram Shape: {sample['audio_features'].shape}")
         print(f"Video Frame Shape: {sample['video_frame'].shape}")
         print(f"Label: {sample['label']}")
+        print(f"Dataset ID: {sample['dataset_id']} (Expected: 1)")
