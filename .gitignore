@@ -1,0 +1,19 @@
+# Datasets
+data/
+
+# Model Weights 
+weights/
+*.pth
+*.pt
+
+# Training Logs
+logs/
+*.log
+
+# Python Cache (Junk files )
+__pycache__/
+*.pyc
+
+# Environment (If you make a virtual environment later)
+venv/
+.env
