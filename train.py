@@ -1,15 +1,18 @@
 import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 import torch
 import csv
 from torch.utils.data import DataLoader, ConcatDataset, random_split
 
+from src.dataset.feature_extractor import MultimodalFeatureExtractor
 from src.dataset.iemocap_dataset import IEMOCAPDataset
 from src.dataset.meld_dataset import MELDDataset
 from src.models.prism_model_v1 import PrismMasterModel
 from src.training.engine import PrismEngine
 
 def main():
-    print("Starting PrismAI Trimodal Training")
+    print("Starting PrismAI Trimodal Training - V2")
 
     BATCH_SIZE = 4
     EPOCHS = 15
@@ -21,8 +24,18 @@ def main():
     meld_csv = r"C:\Users\kathu\OneDrive\Desktop\Projects\PrismAI_v1\data\raw\MELD-RAW\MELD.Raw\train\train_sent_emo.csv"
     meld_vid = r"C:\Users\kathu\OneDrive\Desktop\Projects\PrismAI_v1\data\raw\MELD-RAW\MELD.Raw\train\train_splits"
 
+    print("Loading IEMOCAP...")
     iemocap_ds = IEMOCAPDataset(data_dir=iemocap_dir)
+
+    print("Loading MELD...")
     meld_ds = MELDDataset(csv_path=meld_csv, video_dir=meld_vid)
+
+    print("Loading feature extractor...")
+    shared_extractor = MultimodalFeatureExtractor()
+
+    iemocap_ds.set_extractor(shared_extractor)
+    meld_ds.set_extractor(shared_extractor)
+    print("Extractor assigned to both datasets.")
 
     full_dataset = ConcatDataset([iemocap_ds, meld_ds])
     print(f"Total Samples: {len(full_dataset)}")
@@ -30,22 +43,24 @@ def main():
     train_size = int(0.8 * len(full_dataset))
     val_size = len(full_dataset) - train_size
     train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
+    print(f"Train: {train_size} | Val: {val_size}")
 
     train_loader = DataLoader(
         train_dataset,
         batch_size=BATCH_SIZE,
         shuffle=True,
-        num_workers=2,
+        num_workers=0,
         pin_memory=True
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=BATCH_SIZE,
         shuffle=False,
-        num_workers=2,
+        num_workers=0,
         pin_memory=True
     )
 
+    print("Loading model...")
     model = PrismMasterModel(num_classes=4, num_datasets=2).to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
 
@@ -56,7 +71,10 @@ def main():
 
     csv_file = open("logs/training_history_v2.csv", mode='w', newline='')
     csv_writer = csv.writer(csv_file)
-    csv_writer.writerow(['Epoch', 'Train_Loss', 'Val_Loss', 'Accuracy', 'Precision', 'Recall', 'F1_Score', 'AUC_ROC'])
+    csv_writer.writerow([
+        'Epoch', 'Train_Loss', 'Val_Loss',
+        'Accuracy', 'Precision', 'Recall', 'F1_Score', 'AUC_ROC'
+    ])
 
     best_f1 = 0.0
 
@@ -78,14 +96,18 @@ def main():
             val_metrics['acc'], val_metrics['precision'],
             val_metrics['recall'], val_metrics['f1'], val_metrics['auc']
         ])
+        csv_file.flush()
 
         if val_metrics['f1'] > best_f1:
             best_f1 = val_metrics['f1']
-            torch.save(model.state_dict(), "weights/best_prism_model_v2_weighted.pth")
+            torch.save(
+                model.state_dict(),
+                "weights/best_prism_model_v2_weighted.pth"
+            )
             print(f"New best model saved with F1: {best_f1:.4f}")
 
     csv_file.close()
-    print("Training Complete. Logs saved to logs/training_history.csv")
+    print("Training Complete. Logs saved to logs/training_history_v2.csv")
 
 if __name__ == "__main__":
     main()
